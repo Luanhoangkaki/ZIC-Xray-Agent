@@ -1,0 +1,48 @@
+[Unit]
+Description=ZIC-Xray-Agent observer (does not enable a proxy node)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+DynamicUser=yes
+LoadCredential=config.json:/etc/zic-xray-agent/config.json
+ExecStart=/usr/local/lib/zic-xray-agent/zic-xray-agent run --config ${CREDENTIALS_DIRECTORY}/config.json --state-dir /var/lib/zic-xray-agent/data --log-dir /var/log/zic-xray-agent/files
+Restart=on-failure
+RestartSec=15s
+TimeoutStopSec=15s
+KillMode=control-group
+StateDirectory=zic-xray-agent
+StateDirectoryMode=0700
+LogsDirectory=zic-xray-agent
+LogsDirectoryMode=0700
+UMask=0077
+Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB
+MemoryHigh=32M
+MemoryMax=64M
+TasksMax=64
+CPUQuota=20%
+LimitNOFILE=1024
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+StandardOutput=null
+StandardError=journal
+LogRateLimitIntervalSec=60s
+LogRateLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

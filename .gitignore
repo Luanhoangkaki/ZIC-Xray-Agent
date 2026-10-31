@@ -1,0 +1,8 @@
+/dist/
+/coverage.out
+*.exe
+config.json
+panel-config.json
+/panel-reference/
+/.tools/
+/.cache/

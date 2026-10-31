@@ -1,0 +1,47 @@
+[Unit]
+Description=ZIC isolated agent observer (traffic POST disabled)
+Requires=zic-lab-panel.service zic-lab-core.service
+After=zic-lab-panel.service zic-lab-core.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+DynamicUser=yes
+LoadCredential=agent.json:/opt/zic-xray-lab/config/agent.json
+LoadCredential=ca.pem:/opt/zic-xray-lab/config/ca.pem
+Environment=SSL_CERT_FILE=%d/ca.pem
+Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB
+ExecStart=/opt/zic-xray-lab/bin/zic-xray-agent run --config ${CREDENTIALS_DIRECTORY}/agent.json --state-dir /var/lib/zic-lab-agent/data --log-dir /var/log/zic-lab-agent/files
+Restart=on-failure
+RestartSec=15s
+TimeoutStopSec=15s
+KillMode=control-group
+StateDirectory=zic-lab-agent
+StateDirectoryMode=0700
+LogsDirectory=zic-lab-agent
+LogsDirectoryMode=0700
+UMask=0077
+MemoryHigh=32M
+MemoryMax=64M
+TasksMax=64
+CPUQuota=20%
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+StandardOutput=null
+StandardError=journal
+LogRateLimitIntervalSec=60s
+LogRateLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

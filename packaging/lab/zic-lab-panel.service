@@ -1,0 +1,37 @@
+[Unit]
+Description=ZIC isolated synthetic panel and echo (loopback only)
+Before=zic-lab-core.service zic-lab-agent.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+TimeoutStartSec=60s
+DynamicUser=yes
+LoadCredential=lab.json:/opt/zic-xray-lab/config/lab.json
+LoadCredential=cert.pem:/opt/zic-xray-lab/config/cert.pem
+LoadCredential=key.pem:/opt/zic-xray-lab/config/key.pem
+LoadCredential=ca.pem:/opt/zic-xray-lab/config/ca.pem
+ExecStart=/bin/sh /opt/zic-xray-lab/start.sh panel
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+UMask=0077
+Environment=GOMAXPROCS=1
+MemoryMax=128M
+TasksMax=96
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+StandardOutput=null
+StandardError=journal
+LogRateLimitIntervalSec=60s
+LogRateLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
