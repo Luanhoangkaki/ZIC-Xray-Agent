@@ -1,0 +1,10 @@
+# Store and check out project text consistently, including on Windows.
+*.go text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.service text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 
+	"zic-xray-agent/internal/buildinfo"
 	"zic-xray-agent/internal/daemon"
 	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/panel"
@@ -33,6 +34,13 @@ func main() {
 }
 
 func run(args []string, input io.Reader, output io.Writer) error {
+	if len(args) > 0 && args[0] == "version" {
+		if len(args) != 1 {
+			return logging.Failure(logging.Input, nil)
+		}
+		_, err := fmt.Fprintln(output, "ZIC-Xray-Agent "+buildinfo.Tag)
+		return err
+	}
 	if len(args) > 0 && args[0] == "configure-install" {
 		return configureInstallCommand(args[1:], input, output)
 	}

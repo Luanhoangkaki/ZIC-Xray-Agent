@@ -2,11 +2,13 @@
 
 Go agent cho Debian/Ubuntu amd64/arm64, mục tiêu VPS 1 vCPU / 1 GB RAM. **Observe là mặc định. Không có công tắc gửi traffic thật, không có production manage mode.** Mã đã có chế độ thử `manage-test` trên loopback và hàng đợi traffic bền vững có trạng thái UNKNOWN.
 
-Hồ sơ GitHub **Pre-release v1.0.0-audit2-test** được chuẩn bị cục bộ cho review: [cài đặt cố định phiên bản](docs/releases/v1.0.0/INSTALL.md), [cập nhật/rollback](docs/releases/v1.0.0/UPDATE_ROLLBACK.md), [checklist của chủ repository](docs/releases/v1.0.0/PUBLISH_CHECKLIST.md), [runbook Debian 12 riêng](docs/releases/v1.0.0/DEBIAN12_TEST_RUNBOOK.md). TEST ONLY / OBSERVE MODE / VLESS subset / NOT PRODUCTION READY. Chưa push/tag/publish; Linux/systemd chưa chạy thì giữ NOT RUN. Gói Release tách test executable/fixture khỏi installer và có downloader ghim tag thử cùng SHA256.
+Bản thử nghiệm **v1.0.1-audit3-test** phục vụ kiểm tra lại installer Debian 12: [cài đặt](docs/releases/v1.0.1/INSTALL.md), [release notes](docs/releases/v1.0.1/RELEASE_NOTES.md), [diagnostic](docs/installer-audit3.md), [cập nhật/rollback](docs/releases/v1.0.1/UPDATE_ROLLBACK.md). TEST ONLY / OBSERVE MODE / VLESS subset / NOT PRODUCTION READY. Tag/asset đã phát hành v1.0.0-audit2-test giữ nguyên. Mọi kiểm thử Linux/systemd/VPS chưa thực thi vẫn NOT RUN.
+
+Quy tắc [Semantic Versioning](docs/versioning.md): fix tăng PATCH, tính năng tương thích tăng MINOR, thay đổi không tương thích tăng MAJOR. Version agent/CLI/User-Agent ở internal/buildinfo/version.go; lệnh `zic-xray-agent version` hiển thị v1.0.1-audit3-test. Build dùng -buildvcs=false; BUILD.json ghi commit và manifest nguồn, có đối chiếu rebuild checkout sạch. Installer không chứa test executable, runtime evidence hoặc fixture certificate/key.
 
 ## Trạng thái hiện tại
 
-**v1.0.0 đang HOLD:** xem [điều kiện push/phát hành](docs/releases/v1.0.0/RELEASE_GATE.md) và [audit privacy/tài nguyên](docs/audits/v1.0.0-privacy-resources.md). Archive review cũ chưa chứa audit fixes; chưa có nghiệm thu systemd/VPS Debian 12. Chỉ push/tag/phát hành sau kiểm thử thực tế đạt và chủ repository xác nhận bộ source/asset cuối.
+**Nghiệm thu production đang HOLD:** xem [điều kiện phát hành](docs/releases/v1.0.1/RELEASE_GATE.md) và [audit privacy/tài nguyên](docs/audits/v1.0.0-privacy-resources.md). Audit3 chỉ là bản thử để kiểm tra lại installer trên Debian 12, chưa nghiệm thu systemd/VPS. Chủ repository đã cho phép phát hành Pre-release thử nghiệm v1.0.1-audit3-test khi toàn bộ kiểm tra local bắt buộc đạt; FAIL phải dừng và báo cáo. Nghiệm thu VPS/production vẫn HOLD.
 
 | Phần | Đã triển khai | Phạm vi kiểm chứng |
 | --- | --- | --- |
@@ -39,7 +41,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/build.ps1 -Include
 
 Linux build host dùng `bash scripts/build.sh --include-tests`. Không cần cài Go trên VPS nếu chuyển binary/test binary đã dựng. `dist/SHA256SUMS` bao gồm cả agent, công cụ đo riêng và test suite. Checksum kiểm tra byte, không thay thế xác minh nguồn phát hành.
 
-Bộ thử nghiệm standalone Debian 12 amd64: [hướng dẫn cài/test cách ly](docs/debian12-lab.md). Có `lab.sh`, core chính thức riêng, panel/UUID giả, 11 suite amd64 và đo CPU/RSS, 10/20/30 kết nối, Stats/ledger từng UUID cùng recovery. Không gửi traffic thật, không sửa Xray hiện hữu. Build cả hai kiến trúc có 22 test binary; Linux/VPS chưa được chạy đo trên host Windows.
+Bộ lab standalone Debian 12 amd64 cũ có [hướng dẫn riêng](docs/debian12-lab.md); đợt audit3 không sửa hoặc triển khai lab đó. Build source hiện tại tạo 12 test binary/kiến trúc (24 tổng cộng), tách khỏi installer. Linux/VPS chưa được chạy đo trên host Windows; mọi bài CPU/RSS, 10/20/30 kết nối và recovery còn chờ môi trường thử được duyệt.
 
 `XRAY_BINARY` trong test trỏ đến core chính thức đã xác minh. Test khởi động một core tạm trên loopback với dữ liệu giả, không sửa cấu hình core hiện hữu. Nếu không đặt biến, bài core thật SKIP. Installer cũng cho phép biến này để chọn binary tiền kiểm offline; mặc định dùng core đóng gói chỉ chạy `-test`.
 

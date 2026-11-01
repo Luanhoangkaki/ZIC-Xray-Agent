@@ -1,5 +1,7 @@
 # ZIC-Xray-Agent: mandatory project constraints
 
+- Version policy: every bug fix increments PATCH; backward-compatible new functionality increments MINOR (reset PATCH); incompatible changes increment MAJOR (reset MINOR/PATCH). Changing only a prerelease suffix does not replace a required PATCH bump. Published versions/tags/assets are immutable. Current installer fix release is v1.0.1-audit3-test; preserve v1.0.0-audit2-test. See docs/versioning.md.
+
 - Target Debian/Ubuntu, linux/amd64 and linux/arm64, 1 vCPU / 1 GB RAM.
 - Use Go and one agent binary/process. No Python, Node.js, Java or PHP daemon; no embedded core, V2Node or substitute core. Use official Xray-core separately.
 - Targets, pending real measurements: agent steady RSS <20 MB; idle average CPU <1% of one vCPU. Never present these as measured guarantees.

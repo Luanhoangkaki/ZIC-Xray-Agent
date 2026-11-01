@@ -24,7 +24,7 @@ foreach ($arch in @('amd64','arm64')) {
         if (@($manifest | Where-Object {$_ -eq "$hash  $file"}).Count -ne 1) { throw "Artifact mismatch: $file" }
     }
     $tests = @(Get-ChildItem -LiteralPath "dist/lab-tests/linux-$arch" -Filter '*.test' -File)
-    if ($tests.Count -ne 11) { throw 'Expected eleven functional suites per architecture' }
+    if ($tests.Count -ne 12) { throw 'Expected twelve functional suites per architecture' }
     Copy-Item -LiteralPath "dist/$agentRelative" -Destination (Join-Path $stage "bin/linux-$arch/zic-xray-agent")
     foreach ($test in $tests) { Copy-Item -LiteralPath $test.FullName -Destination (Join-Path $stage "tests/$($test.Name)") }
     foreach ($file in @('install.sh','packaging/zic-xray-agent.service','packaging/rollback-agent-install.sh')) {
@@ -58,7 +58,7 @@ foreach ($arch in @('amd64','arm64')) {
         if (!(Test-Path -LiteralPath $path)) { throw "Missing evidence: $evidence" }
         Write-LF (Join-Path $stage "evidence/$evidence") ([IO.File]::ReadAllText($path))
     }
-    $metadata = [ordered]@{release=$name; target="linux/$arch"; compiler=(& go version); agent_mode='observe'; sending_enabled=$false; production_ready=$false; installed_protocols=@('vless'); unsupported_adapters=@('shadowsocks','trojan','hysteria1','hysteria2'); core_use='offline run -test only'; core_version='v26.10.29'; core_sha256=(Get-FileHash (Join-Path $stage "validation/linux-$arch/xray")).Hash.ToLowerInvariant(); test_binaries=11; debian_installer_execution='NOT RUN'; vps_measurements='NOT RUN'}
+    $metadata = [ordered]@{release=$name; target="linux/$arch"; compiler=(& go version); agent_mode='observe'; sending_enabled=$false; production_ready=$false; installed_protocols=@('vless'); unsupported_adapters=@('shadowsocks','trojan','hysteria1','hysteria2'); core_use='offline run -test only'; core_version='v26.10.29'; core_sha256=(Get-FileHash (Join-Path $stage "validation/linux-$arch/xray")).Hash.ToLowerInvariant(); test_binaries=12; debian_installer_execution='NOT RUN'; vps_measurements='NOT RUN'}
     Write-LF (Join-Path $stage 'BUILD.json') ($metadata | ConvertTo-Json)
     $checksums = @()
     foreach ($file in Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName) {
@@ -66,7 +66,7 @@ foreach ($arch in @('amd64','arm64')) {
         $checksums += (Get-FileHash -LiteralPath $file.FullName).Hash.ToLowerInvariant() + '  ' + $relative
     }
     Write-LF (Join-Path $stage 'SHA256SUMS') (($checksums -join "`n") + "`n")
-    & tar -czf $archive -C $parent $name
+    & 'C:/Program Files/Git/bin/bash.exe' scripts/archive-installer.sh $parent.Replace('\','/') $name $arch $archive.Replace('\','/')
     if ($LASTEXITCODE -ne 0) { throw 'Cannot create installer archive' }
     $hash = (Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant()
     Write-LF "$archive.sha256" "$hash  $name.tar.gz`n"

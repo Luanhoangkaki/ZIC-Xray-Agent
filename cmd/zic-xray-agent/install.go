@@ -13,6 +13,7 @@ import (
 	"zic-xray-agent/internal/daemon"
 	"zic-xray-agent/internal/durable"
 	"zic-xray-agent/internal/installcheck"
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/panel"
 )
 
@@ -23,10 +24,10 @@ func configureInstallCommand(args []string, input io.Reader, output io.Writer) e
 	choice := f.String("selection", "", "1..4")
 	core := f.String("xray-binary", "", "existing official core executable")
 	if f.Parse(args) != nil || f.NArg() != 0 || *dir == "" {
-		return errors.New("tham số cài đặt không hợp lệ; không nhận API Key qua argv")
+		return logging.At(logging.InstallArgs, logging.Input, nil)
 	}
 	if _, err := panel.InstallationType(*choice); err != nil {
-		return err
+		return logging.At(logging.InstallArgs, logging.Input, err)
 	}
 	client := panel.NewClient()
 	defer client.HTTP.CloseIdleConnections()
@@ -37,43 +38,43 @@ func configureInstallation(input io.Reader, output io.Writer, dir, choice, core 
 	info, statErr := os.Lstat(dir)
 	entries, readErr := os.ReadDir(dir)
 	if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || readErr != nil || len(entries) != 0 {
-		return errors.New("tiền kiểm cần thư mục staging trống, không phải symlink")
+		return logging.At(logging.InstallStaging, logging.Storage, nil)
 	}
 	if err := durable.PrivateDir(dir); err != nil {
-		return err
+		return logging.At(logging.InstallStaging, logging.Storage, err)
 	}
 	auth, err := readCredentials(input)
 	if err != nil {
-		return err
+		return logging.At(logging.InstallCredentials, logging.Input, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	probe, err := client.ProbeInstallation(ctx, auth, choice)
 	if err != nil {
-		return err
+		return logging.At(logging.InstallProbe, logging.PanelResponse, err)
 	}
 	if err := probe.RequireAgentAdapter(); err != nil {
-		return err
+		return logging.At(logging.InstallAdapter, logging.Unsupported, err)
 	}
 	spec, err := panel.ParseVLESS(probe.Config.Raw)
 	if err != nil {
-		return err
+		return logging.At(logging.InstallVLESS, logging.VLESSConfig, err)
 	}
 	if spec.TLS == 0 && !panel.IsLoopbackPanel(auth.PanelURL) {
-		return errors.New("VLESS không TLS chỉ được dùng trong kiểm thử loopback")
+		return logging.At(logging.InstallTLS, logging.TLSRequired, nil)
 	}
 	users, err := client.FetchUsers(ctx, auth, "")
 	if err != nil {
-		return err
+		return logging.At(logging.InstallUsers, logging.PanelResponse, err)
 	}
 	if err := panel.RequireSupportedPolicies(users.Users); err != nil {
-		return err
+		return logging.At(logging.InstallPolicy, logging.Policy, err)
 	}
 	if err := installcheck.Validate(ctx, core, dir, spec, auth.NodeID, users.Users); err != nil {
-		return err
+		return logging.At(logging.InstallCore, logging.CoreConfig, err)
 	}
 	if err := saveNew(dir, auth, probe.Config); err != nil {
-		return err
+		return logging.At(logging.InstallSave, logging.Storage, err)
 	}
 	fmt.Fprintln(output, "API và Xray tiền kiểm hợp lệ. Agent được cấu hình observe; không bật proxy hoặc gửi traffic POST.")
 	return nil

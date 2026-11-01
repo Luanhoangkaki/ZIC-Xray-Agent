@@ -12,6 +12,7 @@ import (
 	"zic-xray-agent/internal/accounting"
 	"zic-xray-agent/internal/control"
 	"zic-xray-agent/internal/durable"
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/panel"
 )
 
@@ -159,6 +160,8 @@ func (r *Runner) Sync(ctx context.Context) error {
 
 type StorageError struct{}
 
+func (*StorageError) Unwrap() error { return logging.Failure(logging.Storage, nil) }
+
 func (*StorageError) Error() string {
 	return "durable state write failed; stop and reload before continuing"
 }
@@ -201,6 +204,8 @@ func (r *Runner) Collect(ctx context.Context) error {
 }
 
 type AccountingError struct{}
+
+func (*AccountingError) Unwrap() error { return logging.Failure(logging.Accounting, nil) }
 
 func (*AccountingError) Error() string {
 	return "traffic checkpoint/reset/epoch anomaly; reconciliation required; existing ledger retained"

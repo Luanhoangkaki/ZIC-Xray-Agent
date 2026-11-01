@@ -5,7 +5,9 @@ set +v
 set -Eeuo pipefail
 umask 077
 unset server_token
+readonly release_version='v1.0.1-audit3-test'
 if [[ ${1:-} == --help ]]; then
+    printf 'ZIC-Xray-Agent %s\n' "$release_version"
     printf '%s\n' 'Usage: sudo bash install.sh' 'Menu 1..4, then Panel domain, visible API Key, Node ID.' 'Only verified VLESS adapters can install; observe only, no POST or Xray changes.'
     exit 0
 fi
@@ -71,7 +73,9 @@ expected=$(awk -v target="bin/linux-$arch/zic-xray-agent" '{sub(/^\*/,"",$2); if
 actual=$(sha256sum "$transaction/agent")
 [[ $expected =~ ^[a-f0-9]{64}$ && ${actual%% *} == "$expected" ]] || exit 1
 xray_binary=${XRAY_BINARY:-"$script_dir/validation/linux-$arch/xray"}
-if [[ -n $xray_binary ]]; then xray_binary=$(realpath -e -- "$xray_binary"); fi
+if [[ -n $xray_binary ]]; then
+    xray_binary=$(realpath -e -- "$xray_binary" 2>/dev/null) || { printf '%s\n' 'E_INSTALL_CORE_CORE_BINARY' >&2; exit 1; }
+fi
 # Bash builtin printf: the secret crosses stdin, never argv or exported env.
 printf '%s\0%s\0%s\0' "$panel_url" "$server_token" "$node_id" | "$transaction/agent" configure-install --selection "$selection" --xray-binary "$xray_binary" --output-dir "$transaction/config"
 unset server_token

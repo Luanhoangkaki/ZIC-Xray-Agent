@@ -22,8 +22,22 @@ func TestDiagnosticNeverRendersUntrustedInput(t *testing.T) {
 			}
 		}
 	}
-	if !strings.HasPrefix(Diagnostic(errors.New("Server Token bị từ chối bởi V2B-ZIC (HTTP 500)")), "E_AUTH:") {
+	if Diagnostic(Failure(Auth, nil)) != "E_AUTH" {
 		t.Fatal("safe authentication classification lost")
+	}
+}
+
+func TestTypedStagesSurviveWrappingWithoutRenderingCause(t *testing.T) {
+	cause := &os.PathError{Op: "open", Path: "private-api-canary", Err: os.ErrPermission}
+	err := At(InstallCore, CoreConfig, Failure(CoreExec, cause))
+	if !errors.Is(err, os.ErrPermission) || Diagnostic(fmt.Errorf("private-key-canary: %w", err)) != "E_INSTALL_CORE_CORE_EXEC" || err.Error() != "E_INSTALL_CORE_CORE_EXEC" {
+		t.Fatal("typed stage or safe diagnostic lost")
+	}
+	if Diagnostic(errors.New("Server Token bị từ chối bởi V2B-ZIC (HTTP 500)")) == "E_AUTH" {
+		t.Fatal("untyped text must not classify authentication")
+	}
+	if Diagnostic(Failure(Code(255), cause)) != "E_OPERATION" || Diagnostic(At(Stage(255), Input, cause)) != "E_OPERATION" {
+		t.Fatal("unrecognized identifier escaped closed allowlist")
 	}
 }
 

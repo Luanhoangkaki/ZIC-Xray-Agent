@@ -11,6 +11,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"zic-xray-agent/internal/logging"
 )
 
 const fixtureUUID = "15a4235c-39ac-42ea-a1b1-100000000042"
@@ -28,7 +30,7 @@ func TestProductionConfigHasNoProtocol(t *testing.T) {
 }
 
 func TestProductionErrorMessagesAreRecognizedButNotEchoed(t *testing.T) {
-	for index, test := range []struct{ message, expected string }{{"token is error", "Server Token"}, {"token is null", "Server Token"}, {"server is not exist", "Node ID"}, {"private-token leaked in server exception", "panel lỗi nội bộ"}} {
+	for index, test := range []struct{ message, expected string }{{"token is error", "E_AUTH"}, {"token is null", "E_AUTH"}, {"server is not exist", "E_NODE"}, {"private-token leaked in server exception", "E_PANEL_STATUS"}} {
 		t.Run(fmt.Sprintf("error_case_%d", index), func(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(500)
@@ -38,7 +40,7 @@ func TestProductionErrorMessagesAreRecognizedButNotEchoed(t *testing.T) {
 			client := trustedClient(server)
 			defer client.HTTP.CloseIdleConnections()
 			_, err := client.FetchConfig(context.Background(), Credentials{PanelURL: server.URL, Token: "private-token", NodeID: 42}, "")
-			if err == nil || !strings.Contains(err.Error(), test.expected) || strings.Contains(err.Error(), "private-token") {
+			if err == nil || logging.Diagnostic(err) != test.expected || strings.Contains(err.Error(), "private-token") {
 				t.Fatal("wrong/unsafe production error; raw error suppressed")
 			}
 		})

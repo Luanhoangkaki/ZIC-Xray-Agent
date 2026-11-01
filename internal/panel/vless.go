@@ -10,6 +10,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"zic-xray-agent/internal/logging"
 )
 
 // VLESSSpec is intentionally narrow: unsupported routes, transports, encryption
@@ -80,11 +82,11 @@ func ParseVLESS(raw []byte) (VLESSSpec, error) {
 		return spec, nil
 	}
 	if node.TLS != 2 {
-		return VLESSSpec{}, errors.New("certificate TLS not implemented; refusing to disable TLS")
+		return VLESSSpec{}, logging.Failure(logging.TLSCertificate, nil)
 	}
 	reality, err := parseReality(node.TLSSettings)
 	if err != nil {
-		return VLESSSpec{}, err
+		return VLESSSpec{}, logging.Failure(logging.RealityConfig, nil)
 	}
 	spec.Reality = &reality
 	return spec, nil

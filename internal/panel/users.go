@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/strictjson"
 )
 
@@ -119,7 +120,7 @@ func StatsUserID(email string, nodeID int64) (int64, bool) {
 func RequireSupportedPolicies(users []User) error {
 	for _, u := range users {
 		if (u.SpeedLimit != nil && *u.SpeedLimit > 0) || (u.DeviceLimit != nil && *u.DeviceLimit > 0) {
-			return errors.New("speed_limit/device_limit requires an enforcement mechanism; refusing to bypass policy")
+			return logging.Failure(logging.Policy, nil)
 		}
 	}
 	return nil

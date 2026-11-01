@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"zic-xray-agent/internal/buildinfo"
 )
 
 const validNode = `{"protocol":"vless","server_port":443,"network":"tcp","tls":0,"base_config":{"pull_interval":75,"push_interval":90}}`
@@ -22,6 +24,9 @@ func TestConfigAuthenticationAndETag(t *testing.T) {
 	requests := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
+		if r.Header.Get("User-Agent") != buildinfo.UserAgent {
+			t.Error("agent release identity missing from request")
+		}
 		if r.URL.Path != "/prefix/api/v1/server/UniProxy/config" || r.URL.Query().Get("token") != secret || r.URL.Query().Get("node_id") != "123" || r.URL.Query().Get("node_type") != "vless" {
 			t.Error("incorrect UniProxy request")
 		}

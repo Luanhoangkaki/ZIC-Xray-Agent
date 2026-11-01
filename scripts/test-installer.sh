@@ -3,6 +3,7 @@
 # are replaced in private copies. Never calls real systemctl or /dev/tty.
 set -euo pipefail
 umask 077
+unset XRAY_BINARY # UI/transaction mocks always use their synthetic package.
 project=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/zic-installer-test.XXXXXXXX")
 host_os=$(uname -s)
@@ -88,6 +89,12 @@ configure-install)
     IFS= read -r -d '' panel
     IFS= read -r -d '' secret
     IFS= read -r -d '' node
+    if [[ -n ${FAIL_STAGE_CODE:-} ]]; then
+        case $FAIL_STAGE_CODE in
+            E_INSTALL_PROBE_PANEL_RESPONSE|E_INSTALL_TLS_TLS_REQUIRED|E_INSTALL_VLESS_REALITY_CONFIG|E_INSTALL_USERS_PANEL_RESPONSE|E_INSTALL_POLICY_POLICY|E_INSTALL_CORE_CORE_EXEC|E_INSTALL_SAVE_STORAGE) printf '%s\n' "$FAIL_STAGE_CODE" >&2; exit 1;;
+            *) exit 99;;
+        esac
+    fi
     [[ $choice == 4 && ${FAIL_PREFLIGHT:-0} == 0 ]] || exit 1
     printf '{"mode":"observe","server_token":"%s"}\n' "$secret" > "$output/config.json"
     printf '%s\n' '{"network":"tcp"}' > "$output/panel-config.json"
@@ -151,6 +158,21 @@ for failure in FAIL_PREFLIGHT FAIL_UNIT FAIL_ENABLE FAIL_STATUS; do
     assert_no_install
 done
 printf '%s\n' 'PASS preflight/unit/start/snapshot faults automatically rollback'
+
+for code in E_INSTALL_PROBE_PANEL_RESPONSE E_INSTALL_TLS_TLS_REQUIRED E_INSTALL_VLESS_REALITY_CONFIG E_INSTALL_USERS_PANEL_RESPONSE E_INSTALL_POLICY_POLICY E_INSTALL_CORE_CORE_EXEC E_INSTALL_SAVE_STORAGE; do
+    setup_case "$code"
+    if FAIL_STAGE_CODE="$code" run_installer; then fail 'stage failure accepted'; fi
+    assert_no_install
+    grep -Fq "$code" "$CASE_ROOT/stderr" || fail 'stage code lost during rollback'
+    [[ $(grep -c '^configure-install ' "$CASE_ROOT/agent-args.log") == 1 && $(grep -o 'Nhập ' "$CASE_ROOT/stderr" | wc -l) == 4 ]] || fail 'preflight retried or prompted for key again'
+done
+setup_case missing-core
+rm -- "$CASE_ROOT/package/validation/linux-amd64/xray"
+(cd "$CASE_ROOT/package" && sha256sum install.sh rollback-install.sh bin/linux-amd64/zic-xray-agent packaging/zic-xray-agent.service > SHA256SUMS)
+if run_installer; then fail 'missing core accepted'; fi
+assert_no_install
+grep -Fq 'E_INSTALL_CORE_CORE_BINARY' "$CASE_ROOT/stderr" || fail 'missing core code lost'
+printf '%s\n' 'PASS stage codes retained through rollback; no repeat preflight/key prompts; missing core has fixed code'
 
 setup_case existing
 mkdir -p "$CASE_ROOT/etc/zic-xray-agent"

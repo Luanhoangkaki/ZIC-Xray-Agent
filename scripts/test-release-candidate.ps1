@@ -1,20 +1,21 @@
-param([string]$Candidate = 'audit2')
+param([string]$Candidate = 'audit3-test')
 $ErrorActionPreference = 'Stop'
 if ($Candidate -notmatch '^[a-z0-9-]{1,24}$') {throw 'Invalid candidate'}
 $projectRoot=Split-Path -Parent $PSScriptRoot
 Set-Location $projectRoot
 $utf8=[Text.UTF8Encoding]::new($false)
-$evidence=Join-Path $projectRoot ".cache/release-v1.0.0-$Candidate/evidence"
+$evidence=Join-Path $projectRoot ".cache/release-v1.0.1-$Candidate/evidence"
 New-Item -ItemType Directory -Force -Path $evidence | Out-Null
 $env:GOCACHE=Join-Path $projectRoot '.cache/go-build'
 $env:XRAY_BINARY=Join-Path $projectRoot '.tools/xray/bin/xray.exe'
 $env:GOOS='windows'; $env:GOARCH='amd64'; $env:CGO_ENABLED='0'
-foreach ($helper in @('ZIC_AUDIT_GRPC_HELPER','ZIC_AUDIT_PANIC_HELPER','ZIC_DAEMON_CRASH_HELPER','ZIC_SEND_CRASH_HELPER')) {Remove-Item -LiteralPath "Env:$helper" -ErrorAction SilentlyContinue}
+$env:GOTOOLCHAIN='local'; $env:GOPROXY='off'; $env:GOSUMDB='off'; $env:GOWORK='off'; $env:GOFLAGS=''
+foreach ($helper in @('ZIC_AUDIT_GRPC_HELPER','ZIC_AUDIT_PANIC_HELPER','ZIC_DAEMON_CRASH_HELPER','ZIC_SEND_CRASH_HELPER','ZIC_INSTALL_DIAGNOSTIC_HELPER','ZIC_INSTALL_DIAGNOSTIC_DIR')) {Remove-Item -LiteralPath "Env:$helper" -ErrorAction SilentlyContinue}
 $bash='C:/Program Files/Git/bin/bash.exe'
 if (!(Test-Path -LiteralPath $bash)) {throw 'This host runner requires Git Bash; use Linux runner separately'}
 function Hash($path) {(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
 function Inputs {
-    $files=@(Get-Item AGENTS.md,go.mod,go.sum,install.sh)
+    $files=@(Get-Item AGENTS.md,go.mod,go.sum,install.sh,.gitattributes)
     foreach ($dir in @('cmd','internal','packaging','scripts')) {$files+=Get-ChildItem -LiteralPath $dir -File -Recurse | Where-Object {$_.Extension -in '.go','.sh','.ps1','.service'}}
     @($files | Sort-Object FullName | ForEach-Object {"$(Hash $_.FullName)  $($_.FullName.Substring($projectRoot.Length+1).Replace('\','/'))"})
 }
@@ -25,7 +26,7 @@ $goLog=[IO.File]::ReadAllText((Join-Path $evidence 'windows-go-tests.log'))
 $packages=[regex]::Matches($goLog,'(?m)^ok\s+zic-xray-agent/').Count
 $passes=[regex]::Matches($goLog,'(?m)^--- PASS:').Count
 $skips=@([regex]::Matches($goLog,'(?m)^--- SKIP: (\S+)') | ForEach-Object {$_.Groups[1].Value})
-if ($packages -ne 11 -or $skips.Count -ne 1 -or $skips[0] -ne 'TestLinuxReadOnlyFDAndIOPlateau') {throw 'Native test result/skip mismatch'}
+if ($packages -ne 12 -or $skips.Count -ne 1 -or $skips[0] -ne 'TestLinuxReadOnlyFDAndIOPlateau') {throw 'Native test result/skip mismatch'}
 Write-Output "Native packages PASS=$packages; top-level PASS=$passes; Linux-only SKIP=$($skips.Count)"
 & $bash scripts/test-installer.sh *> (Join-Path $evidence 'windows-shell-tests.log')
 if ($LASTEXITCODE -ne 0) {throw 'Installer mock failed'}
@@ -34,6 +35,8 @@ if ($LASTEXITCODE -ne 0) {throw 'Startup mock failed'}
 & $bash scripts/test-debian-runner-guards.sh *> (Join-Path $evidence 'debian-runner-guards.log')
 if ($LASTEXITCODE -ne 0) {throw 'Debian runner guard mock failed'}
 Write-Output 'Installer/startup/readiness/PID/rollback mocks PASS (no real services)'
+& $bash scripts/test-installer-archive.sh *> (Join-Path $evidence 'archive-modes.log')
+if ($LASTEXITCODE -ne 0) {throw 'Archive Unix mode regression failed'}
 $syntax=@()
 foreach ($file in @(Get-Item install.sh)+@(Get-ChildItem scripts,packaging -Filter *.sh -File -Recurse)) {
     & $bash -n $file.FullName

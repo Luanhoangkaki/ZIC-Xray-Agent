@@ -15,7 +15,7 @@ try {
         New-Item -ItemType Directory -Force -Path $directory | Out-Null
         foreach ($component in @('zic-xray-agent', 'zic-bench','zic-lab')) {
             $target = Join-Path $directory $component
-            & go build -trimpath -ldflags '-s -w' -o $target "./cmd/$component"
+            & go build -buildvcs=false -trimpath -ldflags '-s -w' -o $target "./cmd/$component"
             if ($LASTEXITCODE -ne 0) { throw "Build failed for $architecture/$component" }
             $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
             $checksums += "$hash  linux-$architecture/$component"
@@ -29,7 +29,7 @@ try {
                 if ([string]::IsNullOrWhiteSpace($package)) { continue }
                 $name = $package.Substring('zic-xray-agent/'.Length).Replace('/', '-') + '.test'
                 $target = Join-Path $testDirectory $name
-                & go test -c -trimpath -ldflags '-s -w' -o $target $package
+                & go test -c -buildvcs=false -trimpath -ldflags '-s -w' -o $target $package
                 if ($LASTEXITCODE -ne 0) { throw "Test build failed for $architecture/$package" }
                 $hash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
                 $checksums += "$hash  lab-tests/linux-$architecture/$name"

@@ -9,7 +9,7 @@ trap 'rm -f -- "$manifest"' EXIT
 for arch in amd64 arm64; do
     mkdir -p -- "dist/linux-$arch"
     for component in zic-xray-agent zic-bench zic-lab; do
-        GOOS=linux GOARCH="$arch" go build -trimpath -ldflags '-s -w' -o "dist/linux-$arch/$component" "./cmd/$component"
+        GOOS=linux GOARCH="$arch" go build -buildvcs=false -trimpath -ldflags '-s -w' -o "dist/linux-$arch/$component" "./cmd/$component"
         (cd dist && sha256sum "linux-$arch/$component") >> "$manifest"
     done
     if [[ $include_tests == --include-tests ]]; then
@@ -19,7 +19,7 @@ for arch in amd64 arm64; do
             [[ -n $package ]] || continue
             name=${package#zic-xray-agent/}
             name=${name//\//-}.test
-            GOOS=linux GOARCH="$arch" go test -c -trimpath -ldflags '-s -w' -o "dist/lab-tests/linux-$arch/$name" "$package"
+            GOOS=linux GOARCH="$arch" go test -c -buildvcs=false -trimpath -ldflags '-s -w' -o "dist/lab-tests/linux-$arch/$name" "$package"
             (cd dist && sha256sum "lab-tests/linux-$arch/$name") >> "$manifest"
         done <<< "$packages"
     fi

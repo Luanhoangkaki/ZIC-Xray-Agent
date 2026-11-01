@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"time"
 
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/panel"
 )
 
@@ -31,27 +32,27 @@ var coreHashes = map[string]string{
 func VerifyCore(binary string) error {
 	info, err := os.Lstat(binary)
 	if err != nil || !filepath.IsAbs(binary) || !info.Mode().IsRegular() || info.Size() > 128<<20 {
-		return errors.New("cần đường dẫn binary Xray chính thức hợp lệ")
+		return logging.Failure(logging.CoreBinary, nil)
 	}
 	f, err := os.Open(binary)
 	if err != nil {
-		return errors.New("không đọc được binary Xray")
+		return logging.Failure(logging.CoreRead, nil)
 	}
 	defer f.Close()
 	h := sha256.New()
 	if _, err := io.Copy(h, io.LimitReader(f, (128<<20)+1)); err != nil {
-		return errors.New("không kiểm tra được checksum Xray")
+		return logging.Failure(logging.CoreRead, nil)
 	}
 	want := coreHashes[runtime.GOOS+"/"+runtime.GOARCH]
 	if want == "" || hex.EncodeToString(h.Sum(nil)) != want {
-		return errors.New("Xray không khớp binary chính thức v26.10.29 đã kiểm chứng; không tự chấp nhận core khác")
+		return logging.Failure(logging.CoreVerify, nil)
 	}
 	return nil
 }
 
 func CoreConfig(spec panel.VLESSSpec, nodeID int64, users []panel.User) ([]byte, error) {
 	if spec.Port == 0 || spec.Port > 65535 || (spec.TLS != 0 && (spec.TLS != 2 || spec.Reality == nil)) {
-		return nil, errors.New("VLESS chưa được xác nhận hỗ trợ")
+		return nil, logging.Failure(logging.CoreConfig, nil)
 	}
 	clients := []any{}
 	for _, u := range users {
@@ -84,19 +85,25 @@ func Validate(ctx context.Context, binary, directory string, spec panel.VLESSSpe
 	}
 	copyFile, err := os.OpenFile(copyPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
 	if err != nil {
-		return errors.New("không tạo được bản core tiền kiểm riêng")
+		return logging.Failure(logging.CoreCopy, nil)
 	}
 	defer os.Remove(copyPath)
+	// Only the private copy is executed; the verified source is read-only input
+	// and need not have execute bits. Do not inherit a restrictive umask here.
+	if copyFile.Chmod(0700) != nil {
+		copyFile.Close()
+		return logging.Failure(logging.CoreCopy, nil)
+	}
 	source, err := os.Open(binary)
 	if err != nil {
 		copyFile.Close()
-		return errors.New("không đọc được core tiền kiểm")
+		return logging.Failure(logging.CoreRead, nil)
 	}
 	_, copyErr := io.Copy(copyFile, io.LimitReader(source, (128<<20)+1))
 	source.Close()
 	closeErr := copyFile.Close()
 	if copyErr != nil || closeErr != nil {
-		return errors.New("không sao chép được core tiền kiểm")
+		return logging.Failure(logging.CoreCopy, nil)
 	}
 	if err := VerifyCore(copyPath); err != nil {
 		return err
@@ -110,9 +117,14 @@ func Validate(ctx context.Context, binary, directory string, spec panel.VLESSSpe
 	// existing Xray config. A minimal environment also removes proxy variables.
 	confdir, err := os.MkdirTemp(directory, "empty-confdir-")
 	if err != nil {
-		return errors.New("không tạo được môi trường tiền kiểm riêng")
+		return logging.Failure(logging.CoreCopy, nil)
 	}
 	defer os.Remove(confdir)
+	return runValidation(ctx, binary, directory, confdir, raw)
+}
+
+// Called only after checksum verification of the private executable copy.
+func runValidation(ctx context.Context, binary, directory, confdir string, raw []byte) error {
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	command := exec.CommandContext(bounded, binary, "run", "-test", "-format", "json", "-config", "stdin:", "-confdir", confdir)
@@ -125,8 +137,15 @@ func Validate(ctx context.Context, binary, directory string, spec panel.VLESSSpe
 	// Core diagnostics may contain private keys/users. Discard both streams;
 	// command arguments contain only paths, never API Key or JSON payload.
 	command.Stdout, command.Stderr = io.Discard, io.Discard
-	if command.Run() != nil {
-		return errors.New("Xray từ chối cấu hình hoặc tiền kiểm quá hạn; chưa cài Agent")
+	if err := command.Run(); err != nil {
+		if bounded.Err() != nil {
+			return logging.Failure(logging.CoreTimeout, nil)
+		}
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return logging.Failure(logging.CoreConfig, nil)
+		}
+		return logging.Failure(logging.CoreExec, nil)
 	}
 	return nil
 }

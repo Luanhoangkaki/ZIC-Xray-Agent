@@ -12,8 +12,29 @@ import (
 	"strings"
 	"testing"
 
+	"zic-xray-agent/internal/buildinfo"
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/panel"
 )
+
+type versionInput struct{}
+
+func (versionInput) Read([]byte) (int, error) { panic("version must not read credentials") }
+
+func TestVersionCommandIsStaticAndRejectsExtraArguments(t *testing.T) {
+	var output strings.Builder
+	if run([]string{"version"}, versionInput{}, &output) != nil || output.String() != "ZIC-Xray-Agent v1.0.1-audit3-test\n" {
+		t.Fatal("incorrect release identity")
+	}
+	if buildinfo.BaseVersion != "v1.0.1" || buildinfo.Tag != "v1.0.1-audit3-test" {
+		t.Fatal("release metadata mismatch")
+	}
+	output.Reset()
+	err := run([]string{"version", "private-api-canary"}, versionInput{}, &output)
+	if logging.Diagnostic(err) != "E_INPUT" || output.Len() != 0 {
+		t.Fatal("version command accepted or exposed extra input")
+	}
+}
 
 func TestCredentialInput(t *testing.T) {
 	auth, err := readCredentials(strings.NewReader("panel.example\x00private token\x0042\x00"))

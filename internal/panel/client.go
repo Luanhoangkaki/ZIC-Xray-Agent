@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"zic-xray-agent/internal/buildinfo"
+	"zic-xray-agent/internal/logging"
 	"zic-xray-agent/internal/strictjson"
 )
 
@@ -33,10 +35,10 @@ func NormalizeURL(raw string) (string, error) {
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
-		return "", errors.New("Panel URL phải là tên miền hoặc HTTPS URL, không chứa thông tin đăng nhập, query hay fragment")
+		return "", logging.Failure(logging.Input, nil)
 	}
 	if strings.ContainsAny(u.Host, "\\ \t\r\n") {
-		return "", errors.New("Panel URL không hợp lệ")
+		return "", logging.Failure(logging.Input, nil)
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
 	return strings.TrimRight(u.String(), "/"), nil
@@ -49,7 +51,7 @@ func (c *Credentials) Validate() error {
 	}
 	c.PanelURL = base
 	if c.NodeID <= 0 {
-		return errors.New("Node ID phải là số nguyên dương")
+		return logging.Failure(logging.Input, nil)
 	}
 	if c.NodeType == "" {
 		c.NodeType = "vless"
@@ -58,7 +60,7 @@ func (c *Credentials) Validate() error {
 		return errors.New("agent hiện chỉ hỗ trợ Node Type VLESS")
 	}
 	if len(c.Token) == 0 || len(c.Token) > 4096 || strings.ContainsAny(c.Token, "\x00\r\n") {
-		return errors.New("Server Token trống hoặc không hợp lệ")
+		return logging.Failure(logging.AuthInput, nil)
 	}
 	return nil
 }
@@ -120,28 +122,30 @@ func (c *Client) request(ctx context.Context, auth Credentials, resource, etag s
 	u.RawQuery = q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return Result{}, errors.New("không thể tạo yêu cầu API")
+		return Result{}, logging.Failure(logging.Input, nil)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ZIC-Xray-Agent/0.3")
+	req.Header.Set("User-Agent", buildinfo.UserAgent)
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return Result{}, errors.New("không kết nối được API: kiểm tra DNS, HTTPS/chứng chỉ, timeout; chuyển hướng bị từ chối")
+		return Result{}, logging.Failure(logging.PanelTransport, nil)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotModified {
 		if etag == "" {
-			return Result{}, errors.New("API trả 304 khi chưa có cấu hình đã xác thực")
+			return Result{}, logging.Failure(logging.PanelResponse, nil)
 		}
 		return Result{NotModified: true, ETag: etag}, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		var reason string
+		code := logging.PanelStatus
 		switch resp.StatusCode {
 		case 401, 403:
+			code = logging.Auth
 			reason = "Server Token bị từ chối hoặc không có quyền truy cập node"
 		case 404:
 			reason = "không tìm thấy API UniProxy V1 hoặc Node ID"
@@ -152,15 +156,19 @@ func (c *Client) request(ctx context.Context, auth Credentials, resource, etag s
 		case 500:
 			// The production PHP uses HTTP 500 for auth/node failures. Only
 			// recognize exact source-backed messages; never echo an arbitrary body.
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4097))
 			var failure struct {
 				Message string `json:"message"`
 			}
-			_ = json.Unmarshal(body, &failure)
+			if readErr == nil && len(body) <= 4096 && strictjson.Validate(body) == nil {
+				_ = json.Unmarshal(body, &failure)
+			}
 			switch failure.Message {
 			case "token is null", "token is error":
+				code = logging.Auth
 				reason = "Server Token bị từ chối bởi V2B-ZIC"
 			case "server is not exist":
+				code = logging.Node
 				reason = "Node ID không tồn tại cho Node Type đã chọn"
 			default:
 				reason = "panel lỗi nội bộ; không thể xác nhận token hoặc node"
@@ -168,14 +176,14 @@ func (c *Client) request(ctx context.Context, auth Credentials, resource, etag s
 		default:
 			reason = "panel không trả cấu hình hợp lệ"
 		}
-		return Result{}, fmt.Errorf("%s (HTTP %d)", reason, resp.StatusCode)
+		return Result{}, logging.Failure(code, fmt.Errorf("%s (HTTP %d)", reason, resp.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
 	if err != nil {
-		return Result{}, errors.New("đọc phản hồi API thất bại")
+		return Result{}, logging.Failure(logging.PanelRead, nil)
 	}
 	if len(body) > limit {
-		return Result{}, errors.New("phản hồi API vượt giới hạn dung lượng")
+		return Result{}, logging.Failure(logging.PanelSize, nil)
 	}
 	return Result{Raw: body, ETag: resp.Header.Get("ETag")}, nil
 }

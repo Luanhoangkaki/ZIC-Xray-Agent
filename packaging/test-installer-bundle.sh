@@ -22,7 +22,7 @@ install -m 0700 -- "$root/bin/linux-$arch/zic-xray-agent" "$result/zic-xray-agen
 awk -v binary="$result/zic-xray-agent" '{if($0~/^ExecStart=/)sub(/^ExecStart=[^ ]+/,"ExecStart=" binary);print}' "$root/packaging/zic-xray-agent.service" > "$result/zic-xray-agent.service"
 systemd-analyze verify "$result/zic-xray-agent.service" > "$result/unit-verify.log" 2>&1
 tests=("$root/tests/"*.test)
-[[ ${#tests[@]} == 11 ]] || { printf '%s\n' 'Expected exactly 11 functional suites.' >&2; exit 1; }
+[[ ${#tests[@]} == 12 ]] || { printf '%s\n' 'Expected exactly 12 functional suites.' >&2; exit 1; }
 for test in "${tests[@]}"; do
     # Copy into private temp; do not change any installed binary or its mode.
     name=$(basename -- "$test")
