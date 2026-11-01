@@ -6,7 +6,7 @@ set -Eeuo pipefail
 umask 077
 unset server_token
 if [[ ${1:-} == --help ]]; then
-    printf '%s\n' 'Usage: sudo bash install.sh' 'Menu 1..4, then Panel domain, hidden API Key, Node ID.' 'Only verified VLESS adapters can install; observe only, no POST or Xray changes.'
+    printf '%s\n' 'Usage: sudo bash install.sh' 'Menu 1..4, then Panel domain, visible API Key, Node ID.' 'Only verified VLESS adapters can install; observe only, no POST or Xray changes.'
     exit 0
 fi
 [[ $# == 0 ]] || { printf '%s\n' 'Không nhận API Key hay cấu hình qua argv.' >&2; exit 1; }
@@ -36,9 +36,9 @@ IFS= read -r selection <&3
 [[ $selection =~ ^[1-4]$ ]] || { printf '%s\n' 'Lựa chọn không hợp lệ.' >&2; exit 1; }
 printf '%s' 'Nhập tên miền Panel: ' >&3
 IFS= read -r panel_url <&3
-printf '%s' 'Nhập API Key: ' >&3
-IFS= read -r -s server_token <&3
-printf '\n' >&3
+printf '%s' 'Nhập API Key Panel: ' >&3
+# User-requested visible TTY input. Never repeat this value in app output.
+IFS= read -r server_token <&3
 printf '%s' 'Nhập Node ID: ' >&3
 IFS= read -r node_id <&3
 exec 3>&-

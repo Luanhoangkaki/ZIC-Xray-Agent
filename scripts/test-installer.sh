@@ -118,14 +118,15 @@ run_installer
 assert_safe
 [[ $(grep -o 'Nhập ' "$CASE_ROOT/stderr" | wc -l) == 4 ]] || fail 'wrong prompt count'
 for label in '1. Shadowsocks' '2. Trojan' '3. Hysteria' '4. VLESS'; do grep -Fq "$label" "$CASE_ROOT/stderr" || fail 'wrong menu'; done
-grep -Fq 'Nhập lựa chọn [1-4]: Nhập tên miền Panel: Nhập API Key:' "$CASE_ROOT/stderr" || fail 'wrong prompt order'
+grep -Fq 'Nhập lựa chọn [1-4]: Nhập tên miền Panel: Nhập API Key Panel: Nhập Node ID:' "$CASE_ROOT/stderr" || fail 'wrong prompt order'
 [[ -f $CASE_ROOT/agent.active ]] || fail 'Agent was not started'
 transaction=$(find "$CASE_ROOT/var/lib/zic-xray-agent-installer" -maxdepth 1 -type d -name 'install.*')
 bash "$transaction/rollback.sh" rollback "$transaction" >> "$CASE_ROOT/stdout" 2>> "$CASE_ROOT/stderr"
 assert_no_install
 [[ -f $transaction/removed/config/config.json ]] || fail 'rollback did not retain credentials privately'
-printf '%s\n' 'PASS exact menu/field order; hidden-read flag; no key in xtrace/output/argv; autostart and manual rollback; Lab untouched'
-grep -q 'read -r -s server_token' "$project/install.sh" || fail 'API Key echo not disabled'
+grep -Fxq 'IFS= read -r server_token <&3' "$project/install.sh" || fail 'API Key must use normal visible TTY input'
+! grep -Eq 'read .*-[[:alnum:]]*s[[:alnum:]]* .*server_token' "$project/install.sh" || fail 'API Key input must not use silent read'
+printf '%s\n' 'PASS exact four prompts; normal visible-read syntax; no key in xtrace/output/argv/env; autostart and manual rollback; Lab untouched'
 
 for choice in 1 2 3 0 5 '04' '4 '; do
     setup_case "choice-${choice// /space}" "$choice"

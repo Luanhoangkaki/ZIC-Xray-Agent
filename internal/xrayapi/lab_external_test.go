@@ -15,6 +15,7 @@ import (
 
 	"zic-xray-agent/internal/accounting"
 	"zic-xray-agent/internal/daemon"
+	"zic-xray-agent/internal/installcheck"
 	"zic-xray-agent/internal/lab"
 	"zic-xray-agent/internal/panel"
 	"zic-xray-agent/internal/xrayapi"
@@ -117,6 +118,9 @@ func TestPackagedLabFixtureAndAccountingWithOfficialCore(t *testing.T) {
 	if binary == "" {
 		t.Skip("requires independently verified official core")
 	}
+	if installcheck.VerifyCore(binary) != nil {
+		t.Fatal("official fixture core verification failed")
+	}
 	c := newLab(t)
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
@@ -124,14 +128,9 @@ func TestPackagedLabFixtureAndAccountingWithOfficialCore(t *testing.T) {
 	go func() {
 		serveResult <- lab.Serve(ctx, c, filepath.Join(c.Root, "config", "cert.pem"), filepath.Join(c.Root, "config", "key.pem"))
 	}()
-	log, err := os.Create(filepath.Join(c.Root, "core.log"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer log.Close()
 	command := exec.Command(binary, "run", "-config", filepath.Join(c.Root, "config", "xray.json"))
-	command.Stdout = log
-	command.Stderr = log
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +193,7 @@ func TestPackagedLabFixtureAndAccountingWithOfficialCore(t *testing.T) {
 	// mandatory in the Linux CLI and is never simulated as measured here.
 	summary, err := lab.Measure(ctx, c, lab.MeasureOptions{Connections: 10, Duration: time.Second, Interval: 50 * time.Millisecond, Chunk: 4096, Output: filepath.Join(c.Root, "phase"), FunctionalOnly: true})
 	if err != nil || !summary.Passed || summary.ResourcesMeasured || len(summary.UUIDs) != 2 {
-		t.Fatal("packaged lab data path", summary, err)
+		t.Fatal("packaged lab data path failed; identity/payload suppressed")
 	}
 	stopAgent()
 	select {

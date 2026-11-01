@@ -22,12 +22,33 @@ import (
 	"time"
 
 	"golang.org/x/net/proxy"
+	"google.golang.org/grpc/grpclog"
 
 	"zic-xray-agent/internal/accounting"
 	"zic-xray-agent/internal/control"
 	"zic-xray-agent/internal/daemon"
+	"zic-xray-agent/internal/installcheck"
 	"zic-xray-agent/internal/panel"
 )
+
+func TestGRPCLogHelper(t *testing.T) {
+	if os.Getenv("ZIC_AUDIT_GRPC_HELPER") != "1" {
+		return
+	}
+	grpclog.Info("private-grpc-canary")
+	grpclog.Warning("private-grpc-canary")
+	grpclog.Error("private-grpc-canary")
+	grpclog.Fatal("private-grpc-canary")
+}
+
+func TestGRPCLogsCannotBypassSafeBoundary(t *testing.T) {
+	command := exec.Command(os.Args[0], "-test.run=^TestGRPCLogHelper$")
+	command.Env = append(os.Environ(), "ZIC_AUDIT_GRPC_HELPER=1")
+	output, err := command.CombinedOutput()
+	if err == nil || len(output) != 0 {
+		t.Fatal("library diagnostic bypass; raw output suppressed")
+	}
+}
 
 func freePort(t *testing.T) int {
 	t.Helper()
@@ -51,6 +72,9 @@ func TestOfficialCoreIntegration(t *testing.T) {
 	if binary == "" {
 		t.Skip("set XRAY_BINARY to an independently verified official Xray executable")
 	}
+	if installcheck.VerifyCore(binary) != nil {
+		t.Fatal("official fixture core verification failed")
+	}
 	version, err := exec.Command(binary, "version").Output()
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +84,7 @@ func TestOfficialCoreIntegration(t *testing.T) {
 	const uuid = "15a4235c-39ac-42ea-a1b1-100000000042"
 	const uuidB = "15a4235c-39ac-42ea-a1b1-100000000043"
 	config := fmt.Sprintf(`{
-	"log":{"loglevel":"none"},
+	"log":{"loglevel":"none","access":"none","error":"none","dnsLog":false},
 	"api":{"tag":"api","services":["HandlerService","StatsService"]},
 	"stats":{},"policy":{"levels":{"0":{"statsUserUplink":true,"statsUserDownlink":true}}},
 	"inbounds":[
@@ -76,19 +100,14 @@ func TestOfficialCoreIntegration(t *testing.T) {
 	if err := os.WriteFile(path, []byte(config), 0600); err != nil {
 		t.Fatal(err)
 	}
-	log, err := os.Create(filepath.Join(dir, "core.log"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	cmd := exec.Command(binary, "run", "-config", path)
 	cmd.Dir = dir
-	cmd.Stdout = log
-	cmd.Stderr = log
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
-		log.Close()
-		t.Fatal(err)
+		t.Fatal("fixture core start failed")
 	}
-	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait(); _ = log.Close() })
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	client, err := Connect(net.JoinHostPort("127.0.0.1", strconv.Itoa(apiPort)))
@@ -102,8 +121,7 @@ func TestOfficialCoreIntegration(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			data, _ := os.ReadFile(log.Name())
-			t.Fatalf("core API did not start: %s", data)
+			t.Fatal("fixture core API did not start; raw core diagnostics suppressed")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
@@ -117,7 +135,7 @@ func TestOfficialCoreIntegration(t *testing.T) {
 	}
 	users, err := client.Users(ctx, tag)
 	if err != nil || len(users) != 1 || users[0].UUID != uuid {
-		t.Fatal("GetInboundUsers", users, err)
+		t.Fatal("GetInboundUsers result mismatch")
 	}
 	if err := client.ReconcileUsers(ctx, tag, 99, "", []panel.User{u}, nil); err != nil {
 		t.Fatal("idempotent reconciliation", err)
@@ -172,29 +190,22 @@ func TestOfficialCoreIntegration(t *testing.T) {
 					defer workers.Done()
 					conn, err := dialers[index%2].Dial("tcp", echo.Addr().String())
 					if err != nil {
-						t.Error(err)
+						t.Error("fixture connection failed")
 						return
 					}
 					defer conn.Close()
 					conn.SetDeadline(time.Now().Add(5 * time.Second))
 					if _, err := conn.Write(payload); err != nil {
-						t.Error(err)
+						t.Error("fixture write failed")
 						return
 					}
 					reply := make([]byte, len(payload))
 					if _, err := io.ReadFull(conn, reply); err != nil || !bytes.Equal(reply, payload) {
-						t.Error("VLESS echo failed", err)
+						t.Error("VLESS echo failed")
 					}
 				}(i)
 			}
 			workers.Wait()
-			if t.Failed() {
-				data, _ := os.ReadFile(log.Name())
-				if len(data) > 12000 {
-					data = data[len(data)-12000:]
-				}
-				t.Logf("isolated fixture core log: %s", data)
-			}
 		})
 		if t.Failed() {
 			t.Fatal("stop after first failed traffic batch")
@@ -223,9 +234,8 @@ func TestOfficialCoreIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("total payload each direction=%d; each user's pending upload/download: user42=%v user43=%v", expected, traffic[42], traffic[43])
 	if len(traffic) != 2 || traffic[42] != [2]uint64{expected / 2, expected / 2} || traffic[43] != [2]uint64{expected / 2, expected / 2} {
-		t.Fatalf("unexpected per-user accounting: got %v expected per-user bytes in each direction %d", traffic, expected/2)
+		t.Fatal("per-user accounting mismatch; identities/payload suppressed")
 	}
 	checkpointed := false
 	if err := client.ReconcileUsers(ctx, tag, 99, "", nil, func() error { checkpointed = true; return nil }); err != nil || !checkpointed {

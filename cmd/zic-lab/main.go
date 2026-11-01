@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 
 	"zic-xray-agent/internal/durable"
 	"zic-xray-agent/internal/lab"
+	"zic-xray-agent/internal/logging"
 )
 
 func run(args []string) error {
@@ -21,7 +23,7 @@ func run(args []string) error {
 		return errors.New("lab requires init, serve, ready, measure, snapshot, compare or write-pid")
 	}
 	f := flag.NewFlagSet("lab", flag.ContinueOnError)
-	f.SetOutput(os.Stderr)
+	f.SetOutput(io.Discard)
 	root := f.String("root", "/opt/zic-xray-lab", "isolated kit root")
 	config := f.String("config", "/opt/zic-xray-lab/config/lab.json", "private synthetic manifest")
 	base := f.Int("base-port", 38080, "first of six loopback lab ports")
@@ -102,8 +104,10 @@ func run(args []string) error {
 	}
 }
 func main() {
+	logging.SuppressUnstructured()
+	defer logging.RecoverMain()
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, logging.Diagnostic(err))
 		os.Exit(1)
 	}
 }

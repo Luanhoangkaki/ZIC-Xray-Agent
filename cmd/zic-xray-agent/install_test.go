@@ -24,7 +24,7 @@ import (
 
 func TestInteractivePreflightRejectsWithoutSavingOrPosting(t *testing.T) {
 	const secret = "dummy-api-key-never-print"
-	for _, tc := range []struct {
+	for index, tc := range []struct {
 		choice, config, users string
 		code                  int
 	}{
@@ -37,7 +37,7 @@ func TestInteractivePreflightRejectsWithoutSavingOrPosting(t *testing.T) {
 		{"4", `{"message":"token is error"}`, `{"users":[]}`, 500},
 		{"4", `{"server_port":443,"network":"tcp","tls":0}`, `{"users":[]}`, 200}, // invalid core
 	} {
-		t.Run(tc.choice+fmt.Sprint(tc.code)+tc.config, func(t *testing.T) {
+		t.Run(fmt.Sprintf("choice_%s_case_%d", tc.choice, index), func(t *testing.T) {
 			posts := 0
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "GET" {
@@ -58,7 +58,7 @@ func TestInteractivePreflightRejectsWithoutSavingOrPosting(t *testing.T) {
 			var output strings.Builder
 			err := configureInstallation(strings.NewReader(server.URL+"\x00"+secret+"\x0042\x00"), &output, dir, tc.choice, filepath.Join(dir, "not-a-core"), client)
 			if err == nil || posts != 0 || strings.Contains(err.Error(), secret) || strings.Contains(output.String(), secret) {
-				t.Fatal("unsafe preflight", err)
+				t.Fatal("unsafe preflight; raw error suppressed")
 			}
 			entries, _ := os.ReadDir(dir)
 			if len(entries) != 0 {

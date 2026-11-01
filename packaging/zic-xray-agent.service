@@ -19,7 +19,9 @@ StateDirectoryMode=0700
 LogsDirectory=zic-xray-agent
 LogsDirectoryMode=0700
 UMask=0077
-Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB
+Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB GOTRACEBACK=none
+LimitCORE=0
+CoredumpFilter=0x0
 MemoryHigh=32M
 MemoryMax=64M
 TasksMax=64
@@ -40,7 +42,7 @@ RestrictRealtime=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=yes
 StandardOutput=null
-StandardError=journal
+StandardError=null
 LogRateLimitIntervalSec=60s
 LogRateLimitBurst=5
 

@@ -24,8 +24,10 @@ import (
 
 // configure and the observe daemon never start a proxy or mutate Xray.
 func main() {
+	logging.SuppressUnstructured()
+	defer logging.RecoverMain()
 	if err := run(os.Args[1:], os.Stdin, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "Lỗi:", err)
+		fmt.Fprintln(os.Stderr, logging.Diagnostic(err))
 		os.Exit(1)
 	}
 }
@@ -173,5 +175,9 @@ func runDaemon(args []string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	return runner.Run(ctx)
+	err = runner.Run(ctx)
+	if err != nil {
+		_ = logger.Event("agent_operation_failed")
+	}
+	return err
 }

@@ -9,11 +9,11 @@ Installer chỉ có đúng menu dưới và ba trường tiếp theo. **Bản hi
 4. VLESS
 Nhập lựa chọn [1-4]:
 Nhập tên miền Panel:
-Nhập API Key:
+Nhập API Key Panel:
 Nhập Node ID:
 ```
 
-API Key được nhập bằng `read -r -s`, không hiện ký tự. Người dùng nhập từng giá trị rồi Enter. Không có prompt xác nhận, lựa chọn core, menu nâng cấp hoặc hỏi lại; lỗi thì dừng với exit khác 0. Node ID phải là số thập phân dương chuẩn, tối đa `9223372036854775807`; không nhận dấu, khoảng trắng, số 0 hay leading zero. Domain tự chuẩn hóa sang HTTPS; không nhận HTTP, credentials/query/fragment trong URL. API Key ở đây là **server_token của V2B-ZIC**, không suy rằng API key người dùng/admin dùng được.
+API Key được nhập bằng `read -r` bình thường, hiển thị ký tự trên TTY theo yêu cầu ngày 2026-10-31; không dùng `read -s`. Chương trình không in lại giá trị này vào stdout/stderr, lỗi, log hoặc báo cáo. Người dùng nhập từng giá trị rồi Enter. Không có prompt xác nhận, lựa chọn core, menu nâng cấp hoặc hỏi lại; lỗi thì dừng với exit khác 0. Node ID phải là số thập phân dương chuẩn, tối đa `9223372036854775807`; không nhận dấu, khoảng trắng, số 0 hay leading zero. Domain tự chuẩn hóa sang HTTPS; không nhận HTTP, credentials/query/fragment trong URL. API Key ở đây là **server_token của V2B-ZIC**, không suy rằng API key người dùng/admin dùng được.
 
 ## Hợp đồng và cổng kiểm tra giao thức
 
@@ -34,23 +34,23 @@ VLESS cần config và user API hợp lệ, ParseVLESS không hạ security/tran
 
 ## Một lệnh cài
 
-Gói tự chứa binary Go, core chính thức riêng để **kiểm tra offline**, service sandbox, rollback và bộ test. Không cần Go/Python/Node/PHP/Docker hoặc tải dependency lúc cài. Core đóng gói không được cài thành dịch vụ hay thay core hiện tại.
+Gói tự chứa binary Go, core chính thức riêng để **kiểm tra offline**, service sandbox và rollback. Bộ test executable tách riêng khỏi installer. Candidate mới tại `dist/release-candidates/v1.0.0-audit2-test/`, tag thử `v1.0.0-audit2-test`; bộ audit2 trước giữ riêng. Không cần Go/Python/Node/PHP/Docker hoặc tải dependency lúc cài. Core đóng gói không được cài thành dịch vụ hay thay core hiện tại.
 
 File amd64:
 
 ```text
-zic-xray-agent-installer-debian12-amd64-20261031-r1.tar.gz
-zic-xray-agent-installer-debian12-amd64-20261031-r1.tar.gz.sha256
+zic-xray-agent-installer-debian12-amd64-v1.0.0.tar.gz
+zic-xray-agent-installer-debian12-amd64-v1.0.0.tar.gz.sha256
 ```
 
-Arm64 dùng tên `zic-xray-agent-installer-debian12-arm64-20261031-r1.tar.gz` và `.sha256`. Chọn đúng kiến trúc khi chuyển gói. Không tự publish URL tải hoặc dùng curl|bash từ nguồn chưa xác minh.
+Arm64 dùng tên `zic-xray-agent-installer-debian12-arm64-v1.0.0.tar.gz` và `.sha256` trong cùng candidate mới. Chọn đúng kiến trúc khi chuyển gói. Không tự publish URL tải hoặc dùng curl|bash từ nguồn chưa xác minh.
 
 Sau khi chuyển hai file bằng kênh tin cậy và giải nén:
 
 ```bash
-sha256sum --check zic-xray-agent-installer-debian12-amd64-20261031-r1.tar.gz.sha256
-tar -xzf zic-xray-agent-installer-debian12-amd64-20261031-r1.tar.gz
-cd zic-xray-agent-installer-debian12-amd64-20261031-r1
+sha256sum --check zic-xray-agent-installer-debian12-amd64-v1.0.0.tar.gz.sha256
+tar -xzf zic-xray-agent-installer-debian12-amd64-v1.0.0.tar.gz
+cd zic-xray-agent-installer-debian12-amd64-v1.0.0
 ```
 
 Chạy đúng một lệnh để nhập và cài:
@@ -59,7 +59,7 @@ Chạy đúng một lệnh để nhập và cài:
 sudo bash ./install.sh
 ```
 
-Cần Debian 12 + systemd, bash, coreutils, util-linux/flock, awk và phiên TTY để nhập ẩn. Không nhận credentials qua argv/env. Bản phát triển chỉ nên thử panel/UUID giả trên máy được phép; các test cục bộ chỉ dùng HTTPS loopback mock và không kết nối production.
+Cần Debian 12 + systemd, bash, coreutils, util-linux/flock, awk và phiên TTY để nhập bình thường. Không nhận credentials qua argv/env. Bản phát triển chỉ nên thử panel/UUID giả trên máy được phép; các test cục bộ chỉ dùng HTTPS loopback mock và không kết nối production.
 
 Mặc định installer dùng `validation/linux-ARCH/xray` chính thức v26.10.29 để kiểm tra capability/config; không phải phép xác nhận core đang chạy. Nếu cần preflight đúng binary hiện hữu, cung cấp đường dẫn bằng cùng một lệnh, không thêm câu hỏi:
 
@@ -74,7 +74,7 @@ Binary phải trùng hash executable chính thức đã pin. Phiên bản/build 
 | linux/amd64 | `e783b9d2b46ed1ab3617c59b04dfbce38c999322d018c6e060f18d88bf6158aa` |
 | linux/arm64 | `f02fa77fa2f1a0f8f2b4fd69af5000494bcc3fa4e97899caf023c7f72fd74474` |
 
-Tiền kiểm sao chép core vào staging riêng, xác minh lại hash rồi chạy `run -test` với config tạm 0600, confdir trống và môi trường đã lọc; không đọc config Xray hiện tại, không mở listener, không start/restart core/service gốc. stdout/stderr core bị bỏ để không lộ UUID/private key; lỗi được báo bằng thông điệp cố định. Deadline core 30 giây, tổng preflight 60 giây. Source lệnh [Xray run](https://github.com/XTLS/Xray-core/blob/v26.10.29/main/run.go) trả kết quả test trước `server.Start()`.
+Tiền kiểm sao chép core vào staging riêng, xác minh lại hash rồi chạy `run -test` với JSON qua stdin, confdir trống và môi trường đã lọc; không tạo file JSON tiền kiểm chứa UUID/private key. Không đọc config Xray hiện tại, không mở listener, không start/restart core/service gốc. stdout/stderr core bị bỏ để không lộ UUID/private key; lỗi được báo bằng thông điệp cố định. Deadline core 30 giây, tổng preflight 60 giây. Source lệnh [Xray run](https://github.com/XTLS/Xray-core/blob/v26.10.29/main/run.go) trả kết quả test trước `server.Start()`.
 
 Sau preflight thành công mới publish:
 

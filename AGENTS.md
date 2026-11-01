@@ -7,7 +7,7 @@
 - Preserve authentication, authorization, expiry, quotas and access limits. Reject unsupported required policy rather than silently bypassing it.
 - Traffic must use Xray Stats API. Never promise lossless accounting without proving durable snapshots, recovery, panel deduplication and acknowledgement semantics. Do not blindly retry ambiguous traffic submissions.
 - One systemd agent process; restart on failure, bounded resources and logs. Default warning/error. Never log credentials, full authenticated URLs, user records or private keys.
-- Installation asks Panel URL, hidden Server Token, Node ID, in that order. Default node_type=vless. No hardcoded panel, token or node ID; no token in command arguments.
+- Installation asks protocol choice, Panel URL, visibly entered Server Token, Node ID, in that order (user instruction 2026-10-31: normal read, no read -s). Never repeat the token in program output/logs, argv or exported environment. Default node_type=vless. No hardcoded panel, token or node ID.
 - Validate UniProxy V1 authentication, node existence and returned configuration before committing credentials. Restrict configuration directory to 0700 and files to 0600.
 - Do not modify Xray configuration, start/restart Xray or deploy to a production VPS without explicit approval. Writing local code and preparing reviewable artifacts is authorized.
 - Acceptance needs separate agent/Xray/system CPU and memory measurements on a real 1 vCPU / 1 GB Debian/Ubuntu VPS, including 10, 20 and 30 concurrent connections and recovery faults. Windows build/tests do not constitute these measurements.

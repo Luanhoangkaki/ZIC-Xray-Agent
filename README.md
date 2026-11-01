@@ -2,7 +2,11 @@
 
 Go agent cho Debian/Ubuntu amd64/arm64, mục tiêu VPS 1 vCPU / 1 GB RAM. **Observe là mặc định. Không có công tắc gửi traffic thật, không có production manage mode.** Mã đã có chế độ thử `manage-test` trên loopback và hàng đợi traffic bền vững có trạng thái UNKNOWN.
 
+Hồ sơ GitHub **Pre-release v1.0.0-audit2-test** được chuẩn bị cục bộ cho review: [cài đặt cố định phiên bản](docs/releases/v1.0.0/INSTALL.md), [cập nhật/rollback](docs/releases/v1.0.0/UPDATE_ROLLBACK.md), [checklist của chủ repository](docs/releases/v1.0.0/PUBLISH_CHECKLIST.md), [runbook Debian 12 riêng](docs/releases/v1.0.0/DEBIAN12_TEST_RUNBOOK.md). TEST ONLY / OBSERVE MODE / VLESS subset / NOT PRODUCTION READY. Chưa push/tag/publish; Linux/systemd chưa chạy thì giữ NOT RUN. Gói Release tách test executable/fixture khỏi installer và có downloader ghim tag thử cùng SHA256.
+
 ## Trạng thái hiện tại
+
+**v1.0.0 đang HOLD:** xem [điều kiện push/phát hành](docs/releases/v1.0.0/RELEASE_GATE.md) và [audit privacy/tài nguyên](docs/audits/v1.0.0-privacy-resources.md). Archive review cũ chưa chứa audit fixes; chưa có nghiệm thu systemd/VPS Debian 12. Chỉ push/tag/phát hành sau kiểm thử thực tế đạt và chủ repository xác nhận bộ source/asset cuối.
 
 | Phần | Đã triển khai | Phạm vi kiểm chứng |
 | --- | --- | --- |
@@ -11,7 +15,7 @@ Go agent cho Debian/Ubuntu amd64/arm64, mục tiêu VPS 1 vCPU / 1 GB RAM. **Obs
 | VLESS/REALITY | Controller sở hữu inbound riêng, intent ghi trước mutation, inspect core để tiếp tục sau lỗi/crash, đổi transport/UUID, thu hồi user | TCP/REALITY primitive và lifecycle qua official core; handshake REALITY đầy đủ chưa thử |
 | Authorization | Danh sách panel là nguồn quyền; user biến mất được thu hồi, UUID cũ bị loại; cache stale/future bị từ chối | Không suy ra expiry/quota chưa được API cung cấp; speed/device limit dương làm tắt inbound thử, không bỏ qua |
 | Traffic | Counter reset=false, baseline/delta/queue cùng checkpoint, UNKNOWN khi mất kết quả, manual status/export/resolve | Hai user 10/20/30 kết nối; crash trước/sau POST dummy, timeout/500, restart không replay |
-| Systemd/installer | Menu 1–4, API Key nhập ẩn, tiền kiểm panel/core, tự khởi động observe và rollback; DynamicUser/LoadCredential, tài nguyên/log giới hạn | Go/native core + rootless installer mock; runtime installer/systemd Debian chưa kiểm |
+| Systemd/installer | Menu 1–4, API Key hiển thị khi nhập, tiền kiểm panel/core, tự khởi động observe và rollback; DynamicUser/LoadCredential, tài nguyên/log giới hạn | Go/native core + rootless installer mock; runtime installer/systemd Debian chưa kiểm |
 | Debian 12 | Test suite dựng sẵn amd64/arm64, runner chỉ chạy trên VM thử nghiệm trống | Đủ chuẩn bị cho lần kiểm thử cách ly đầu tiên; chưa có kết quả Linux thực tế |
 | RAM/CPU | Một binary agent, không nhúng core, không có Python/Node/Java/PHP daemon; log 4 MiB | Chưa đo VPS: <20 MB RSS và <1% CPU vẫn là mục tiêu |
 
@@ -41,11 +45,11 @@ Bộ thử nghiệm standalone Debian 12 amd64: [hướng dẫn cài/test cách 
 
 ## Cài observer: chỉ sau phê duyệt máy thử nghiệm
 
-Giải nén gói installer Debian 12 đúng kiến trúc rồi chạy `sudo bash ./install.sh`. Có đúng menu Shadowsocks/Trojan/Hysteria/VLESS, sau đó Panel domain → API Key nhập ẩn → Node ID; không có câu hỏi khác. Bản này chỉ cài VLESS đã qua tiền kiểm; các adapter chưa có bị từ chối rõ ràng. Phân biệt Hysteria1/2 bằng version panel, không tự đổi giao thức. Xem [hướng dẫn installer và bộ test](docs/interactive-installer.md).
+Giải nén gói installer Debian 12 đúng kiến trúc rồi chạy `sudo bash ./install.sh`. Có đúng menu Shadowsocks/Trojan/Hysteria/VLESS, sau đó Panel domain → API Key hiển thị khi nhập → Node ID; không có câu hỏi khác. Bản này chỉ cài VLESS đã qua tiền kiểm; các adapter chưa có bị từ chối rõ ràng. Phân biệt Hysteria1/2 bằng version panel, không tự đổi giao thức. Xem [hướng dẫn installer và bộ test](docs/interactive-installer.md).
 
 Config nguồn root 0600 trong thư mục 0700; token qua stdin, không argv/env/log. Snapshot panel có thể chứa private key và cũng phải bảo vệ. Bộ cài từ chối bản cũ, xác minh API/policy và core chính thức bằng config riêng với `-test`, rồi enable/start duy nhất zic-xray-agent.service ở observe, đợi snapshot xác thực. Lỗi thì rollback file/service mới, giữ evidence; không sửa hoặc khởi động server Xray, không thay Lab đang chạy và không triển khai VPS từ máy phát triển.
 
-DynamicUser/LoadCredential giới hạn quyền; state/log ở `/var/lib/zic-xray-agent/data`, `/var/log/zic-xray-agent/files`. Thư mục con thực tương thích symlink thư mục cha của systemd. Log app tối đa 4 x 1 MiB; journal stderr vẫn theo retention hiện có, không đổi journald toàn máy. Các giới hạn CPU/memory là ngân sách thử nghiệm, chưa chứng minh mức sử dụng.
+DynamicUser/LoadCredential giới hạn quyền; state/log ở `/var/lib/zic-xray-agent/data`, `/var/log/zic-xray-agent/files`. Thư mục con thực tương thích symlink thư mục cha của systemd. Log app chỉ mã lỗi kỹ thuật cố định, tối đa 4 x 1 MiB; unit template sau audit bỏ stdout/stderr và thêm kiểm soát traceback/coredump, chưa kiểm chứng trên systemd Debian thật. Không đổi journald toàn máy hay xóa journal lịch sử. Các giới hạn CPU/memory là ngân sách thử nghiệm, chưa chứng minh mức sử dụng.
 
 ## Chế độ và quản lý core
 

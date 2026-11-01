@@ -19,8 +19,11 @@ func TestBoundedRotationAndFixedSafeEvents(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := l.Event("secret-token"); err == nil {
-		t.Fatal("arbitrary data accepted as log event")
+	canaries := []string{"secret-token", "198.51.100.73", "7ad49170-a0be-4a3e-b903-9e8b71933087", "audit-user@example.invalid", "hwid-canary", "visited-canary.invalid", "dns-canary.invalid", "private-key-canary"}
+	for _, value := range canaries {
+		if err := l.Event(value); err == nil {
+			t.Fatal("arbitrary data accepted as log event")
+		}
 	}
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
@@ -31,8 +34,13 @@ func TestBoundedRotationAndFixedSafeEvents(t *testing.T) {
 	}
 	for _, file := range files {
 		data, err := os.ReadFile(filepath.Join(dir, file.Name()))
-		if err != nil || len(data) > 128 || strings.Contains(string(data), "secret-token") {
+		if err != nil || len(data) > 128 {
 			t.Fatal("unbounded or unsafe log", err)
+		}
+		for _, value := range canaries {
+			if strings.Contains(string(data), value) {
+				t.Fatal("sensitive input reached a log/rotated log; value suppressed")
+			}
 		}
 	}
 }

@@ -18,7 +18,9 @@ Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=20s
 UMask=0077
-Environment=GOMAXPROCS=1
+Environment=GOMAXPROCS=1 GOTRACEBACK=none
+LimitCORE=0
+CoredumpFilter=0x0
 MemoryMax=512M
 TasksMax=128
 NoNewPrivileges=yes
@@ -31,7 +33,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 IPAddressDeny=any
 IPAddressAllow=localhost
 StandardOutput=null
-StandardError=journal
+StandardError=null
 LogRateLimitIntervalSec=60s
 LogRateLimitBurst=5
 

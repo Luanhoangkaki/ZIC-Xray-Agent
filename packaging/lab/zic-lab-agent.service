@@ -11,7 +11,9 @@ DynamicUser=yes
 LoadCredential=agent.json:/opt/zic-xray-lab/config/agent.json
 LoadCredential=ca.pem:/opt/zic-xray-lab/config/ca.pem
 Environment=SSL_CERT_FILE=%d/ca.pem
-Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB
+Environment=GOMAXPROCS=1 GOMEMLIMIT=12MiB GOTRACEBACK=none
+LimitCORE=0
+CoredumpFilter=0x0
 ExecStart=/opt/zic-xray-lab/bin/zic-xray-agent run --config ${CREDENTIALS_DIRECTORY}/agent.json --state-dir /var/lib/zic-lab-agent/data --log-dir /var/log/zic-lab-agent/files
 Restart=on-failure
 RestartSec=15s
@@ -39,7 +41,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 IPAddressDeny=any
 IPAddressAllow=localhost
 StandardOutput=null
-StandardError=journal
+StandardError=null
 LogRateLimitIntervalSec=60s
 LogRateLimitBurst=5
 

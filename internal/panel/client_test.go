@@ -62,7 +62,7 @@ func TestFailuresNeverReflectSecrets(t *testing.T) {
 			defer c.HTTP.CloseIdleConnections()
 			_, err := c.FetchConfig(context.Background(), Credentials{PanelURL: server.URL, Token: secret, NodeID: 99}, "")
 			if err == nil || strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), server.URL) {
-				t.Fatal("missing or unsafe error", err)
+				t.Fatal("missing or unsafe error; raw value suppressed")
 			}
 		})
 	}

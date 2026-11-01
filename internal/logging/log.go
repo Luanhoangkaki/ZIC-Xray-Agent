@@ -61,15 +61,18 @@ func (l *Logger) open() error {
 
 // Event accepts only a fixed code, never an arbitrary error, URL, body or user.
 func (l *Logger) Event(code string) error {
+	level := "WARN"
 	switch code {
+	case "agent_operation_failed":
+		level = "ERROR"
 	case "panel_sync_failed", "xray_unavailable", "policy_not_supported", "traffic_collection_disabled", "control_sync_failed", "stale_users_disabled":
 	default:
 		return errors.New("unknown safe log event")
 	}
-	if !l.Warnings {
+	if !l.Warnings && level != "ERROR" {
 		return nil
 	}
-	line := fmt.Sprintf("%s WARN %s\n", time.Now().UTC().Format(time.RFC3339), code)
+	line := fmt.Sprintf("%s %s %s\n", time.Now().UTC().Format(time.RFC3339), level, code)
 	if l.size+int64(len(line)) > l.maxBytes {
 		if err := l.file.Close(); err != nil {
 			return err

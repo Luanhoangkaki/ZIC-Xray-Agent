@@ -28,8 +28,8 @@ func TestProductionConfigHasNoProtocol(t *testing.T) {
 }
 
 func TestProductionErrorMessagesAreRecognizedButNotEchoed(t *testing.T) {
-	for _, test := range []struct{ message, expected string }{{"token is error", "Server Token"}, {"token is null", "Server Token"}, {"server is not exist", "Node ID"}, {"private-token leaked in server exception", "panel lỗi nội bộ"}} {
-		t.Run(test.expected+test.message, func(t *testing.T) {
+	for index, test := range []struct{ message, expected string }{{"token is error", "Server Token"}, {"token is null", "Server Token"}, {"server is not exist", "Node ID"}, {"private-token leaked in server exception", "panel lỗi nội bộ"}} {
+		t.Run(fmt.Sprintf("error_case_%d", index), func(t *testing.T) {
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(500)
 				fmt.Fprintf(w, `{"message":%q}`, test.message)
@@ -39,7 +39,7 @@ func TestProductionErrorMessagesAreRecognizedButNotEchoed(t *testing.T) {
 			defer client.HTTP.CloseIdleConnections()
 			_, err := client.FetchConfig(context.Background(), Credentials{PanelURL: server.URL, Token: "private-token", NodeID: 42}, "")
 			if err == nil || !strings.Contains(err.Error(), test.expected) || strings.Contains(err.Error(), "private-token") {
-				t.Fatal("wrong/unsafe production error", err)
+				t.Fatal("wrong/unsafe production error; raw error suppressed")
 			}
 		})
 	}

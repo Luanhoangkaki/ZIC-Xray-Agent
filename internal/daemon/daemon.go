@@ -214,11 +214,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
-	if r.Stats == nil {
-		if err := r.Log.Event("traffic_collection_disabled"); err != nil {
-			return err
-		}
-	}
+	// No Stats endpoint is normal in the default observer, not a fault to log.
 	nextSync, nextCollect, nextQueue := time.Now(), time.Now(), time.Now()
 	failures := 0
 	staleDisabled := false

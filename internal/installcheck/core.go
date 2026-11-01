@@ -3,6 +3,7 @@
 package installcheck
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -16,7 +17,6 @@ import (
 	"runtime"
 	"time"
 
-	"zic-xray-agent/internal/durable"
 	"zic-xray-agent/internal/panel"
 )
 
@@ -63,7 +63,7 @@ func CoreConfig(spec panel.VLESSSpec, nodeID int64, users []panel.User) ([]byte,
 		stream["realitySettings"] = map[string]any{"show": false, "dest": r.Destination, "xver": r.Xver, "serverNames": []string{r.ServerName}, "privateKey": base64.RawURLEncoding.EncodeToString(r.PrivateKey), "shortIds": []string{hex.EncodeToString(r.ShortID)}}
 	}
 	return json.Marshal(map[string]any{
-		"log":       map[string]any{"loglevel": "none", "access": "none"},
+		"log":       map[string]any{"loglevel": "none", "access": "none", "error": "none", "dnsLog": false},
 		"inbounds":  []any{map[string]any{"tag": "zic-install-validation-only", "listen": "127.0.0.1", "port": spec.Port, "protocol": "vless", "settings": map[string]any{"clients": clients, "decryption": "none"}, "streamSettings": stream}},
 		"outbounds": []any{map[string]any{"protocol": "blackhole"}},
 		"stats":     map[string]any{},
@@ -106,11 +106,6 @@ func Validate(ctx context.Context, binary, directory string, spec panel.VLESSSpe
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(directory, "core-validation.json")
-	if err := durable.Write(path, raw); err != nil {
-		return errors.New("không ghi được cấu hình tiền kiểm riêng")
-	}
-	defer os.Remove(path)
 	// Empty confdir prevents inherited XRAY_LOCATION_CONFDIR from appending any
 	// existing Xray config. A minimal environment also removes proxy variables.
 	confdir, err := os.MkdirTemp(directory, "empty-confdir-")
@@ -120,7 +115,8 @@ func Validate(ctx context.Context, binary, directory string, spec panel.VLESSSpe
 	defer os.Remove(confdir)
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	command := exec.CommandContext(bounded, binary, "run", "-test", "-format", "json", "-config", path, "-confdir", confdir)
+	command := exec.CommandContext(bounded, binary, "run", "-test", "-format", "json", "-config", "stdin:", "-confdir", confdir)
+	command.Stdin = bytes.NewReader(raw) // No UUID/private key JSON written to disk.
 	command.Dir = directory
 	command.Env = []string{"PATH=/usr/bin:/bin", "GOMAXPROCS=1", "GOMEMLIMIT=32MiB", "HOME=" + directory, "TMP=" + directory, "TEMP=" + directory}
 	if runtime.GOOS == "windows" {

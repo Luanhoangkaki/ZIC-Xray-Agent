@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"golang.org/x/net/netutil"
 )
 
 func readEmptyDirectory(path string) (bool, error) {
@@ -37,7 +40,7 @@ func Serve(ctx context.Context, c Config, cert, key string) error {
 	defer echo.Close()
 	node, _ := json.Marshal(c.NodeConfig())
 	users, _ := json.Marshal(map[string]any{"users": c.Users})
-	server := &http.Server{ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32 << 10, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := &http.Server{ErrorLog: log.New(io.Discard, "", 0), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 32 << 10, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusForbidden)
@@ -75,7 +78,9 @@ func Serve(ctx context.Context, c Config, cert, key string) error {
 	// Echo workers are bounded and each connection has a finite idle deadline.
 	capacity := make(chan struct{}, 64)
 	var workers sync.WaitGroup
+	acceptDone := make(chan struct{})
 	go func() {
+		defer close(acceptDone)
 		for {
 			conn, err := echo.Accept()
 			if err != nil {
@@ -109,7 +114,7 @@ func Serve(ctx context.Context, c Config, cert, key string) error {
 		}
 	}()
 	finished := make(chan error, 1)
-	go func() { finished <- server.ServeTLS(api, cert, key) }()
+	go func() { finished <- server.ServeTLS(netutil.LimitListener(api, 8), cert, key) }()
 	select {
 	case err := <-finished:
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -121,6 +126,7 @@ func Serve(ctx context.Context, c Config, cert, key string) error {
 	defer cancel()
 	server.Shutdown(shutdown)
 	echo.Close()
+	<-acceptDone // No WaitGroup.Add may race with Wait after accept stops.
 	workers.Wait()
 	return nil
 }

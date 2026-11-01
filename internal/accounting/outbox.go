@@ -126,6 +126,18 @@ func (l *Ledger) clone() *Ledger {
 // An unattempted tail may coalesce for bounded offline RAM/disk usage; its
 // payload freezes at SENDING. Attempted/UNKNOWN payloads are never modified.
 func (l *Ledger) Enqueue(path string) error {
+	// No state or timestamp changes are required when there are no deltas.
+	// Avoid cloning the entire counter map just to discover an empty payload.
+	hasPending := false
+	for _, c := range l.Counters {
+		if c.Pending != 0 {
+			hasPending = true
+			break
+		}
+	}
+	if !hasPending {
+		return nil
+	}
 	n := l.clone()
 	changed, err := n.enqueuePending()
 	if err != nil {

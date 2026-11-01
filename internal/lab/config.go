@@ -183,7 +183,7 @@ func (c Config) CoreConfig() map[string]any {
 		map[string]any{"type": "field", "inboundTag": []string{fmt.Sprintf("zic-node-%d", NodeID)}, "ip": []string{"127.0.0.1/32"}, "port": fmt.Sprint(c.BasePort + 2), "outboundTag": "lab-direct"},
 		map[string]any{"type": "field", "inboundTag": []string{fmt.Sprintf("zic-node-%d", NodeID)}, "outboundTag": "lab-block"})
 	outbounds = append(outbounds, map[string]any{"tag": "lab-block", "protocol": "blackhole"})
-	return map[string]any{"log": map[string]any{"loglevel": "none", "access": "none"}, "api": map[string]any{"tag": "lab-api", "services": []string{"HandlerService", "StatsService"}}, "stats": map[string]any{}, "policy": map[string]any{"levels": map[string]any{"0": map[string]any{"statsUserUplink": true, "statsUserDownlink": true}}}, "inbounds": inbounds, "outbounds": outbounds, "routing": map[string]any{"rules": rules}}
+	return map[string]any{"log": map[string]any{"loglevel": "none", "access": "none", "error": "none", "dnsLog": false}, "api": map[string]any{"tag": "lab-api", "services": []string{"HandlerService", "StatsService"}}, "stats": map[string]any{}, "policy": map[string]any{"levels": map[string]any{"0": map[string]any{"statsUserUplink": true, "statsUserDownlink": true}}}, "inbounds": inbounds, "outbounds": outbounds, "routing": map[string]any{"rules": rules}}
 }
 func certificates(dir string) error {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

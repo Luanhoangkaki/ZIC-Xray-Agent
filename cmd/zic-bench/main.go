@@ -6,23 +6,64 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"zic-xray-agent/internal/logging"
 )
 
 type process struct {
-	ticks, start uint64
-	rss          uint64
+	ticks, start        uint64
+	rss                 uint64
+	writeBytes, fdCount uint64
 }
 type sample struct {
 	at                                       time.Time
 	processes                                [4]process
 	total, idle, memory, available, swapUsed uint64
 	hasLoad                                  bool
+	hasDetails                               bool
+}
+
+func parseWriteBytes(data string) (uint64, error) {
+	for _, line := range strings.Split(data, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "write_bytes:" {
+			return strconv.ParseUint(fields[1], 10, 64)
+		}
+	}
+	return 0, errors.New("missing process IO counter")
+}
+
+func countFDs(pid int) (uint64, error) {
+	f, err := os.Open(fmt.Sprintf("/proc/%d/fd", pid))
+	if err != nil {
+		return 0, errors.New("process FD counters unavailable; check permissions")
+	}
+	defer f.Close()
+	var count uint64
+	for {
+		entries, err := f.ReadDir(128)
+		count += uint64(len(entries))
+		if count > 16384 {
+			return 0, errors.New("FD sampling bound exceeded")
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, errors.New("cannot read FD counters")
+		}
+	}
+	if pid == os.Getpid() && count > 0 {
+		count--
+	} // Exclude this sampling directory FD.
+	return count, nil
 }
 
 func parseProcess(data string, pageSize uint64) (process, error) {
@@ -46,8 +87,13 @@ func parseProcess(data string, pageSize uint64) (process, error) {
 }
 
 func collect(pids [4]int) (sample, error) {
+	return collectDetails(pids, false)
+}
+
+func collectDetails(pids [4]int, details bool) (sample, error) {
 	var s sample
 	s.hasLoad = pids[3] > 0
+	s.hasDetails = details
 	for i, pid := range pids {
 		if i == 3 && pid == 0 {
 			continue
@@ -61,6 +107,31 @@ func collect(pids [4]int) (sample, error) {
 			return s, err
 		}
 		s.processes[i] = p
+		if details {
+			info, err := os.ReadFile(fmt.Sprintf("/proc/%d/io", pid))
+			if err != nil {
+				return s, errors.New("process IO counters unavailable; check permissions")
+			}
+			written, err := parseWriteBytes(string(info))
+			if err != nil {
+				return s, err
+			}
+			fds, err := countFDs(pid)
+			if err != nil {
+				return s, err
+			}
+			// Reject PID reuse across the detail reads, not just across rows.
+			again, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+			if err != nil {
+				return s, errors.New("process identity unavailable")
+			}
+			verified, err := parseProcess(string(again), uint64(os.Getpagesize()))
+			if err != nil || verified.start != p.start {
+				return s, errors.New("process identity changed during detail sample")
+			}
+			s.processes[i].writeBytes = written
+			s.processes[i].fdCount = fds
+		}
 	}
 	stat, err := os.ReadFile("/proc/stat")
 	if err != nil {
@@ -138,15 +209,33 @@ func row(previous, current sample, hz float64) ([]string, error) {
 		}
 		values = append(values, fmt.Sprintf("%.4f", float64(p.ticks-old.ticks)/hz/elapsed*100), strconv.FormatUint(p.rss, 10))
 	}
+	if current.hasDetails != previous.hasDetails {
+		return nil, errors.New("resource detail schema changed")
+	}
+	if current.hasDetails {
+		count := 3
+		if current.hasLoad {
+			count = 4
+		}
+		for i := 0; i < count; i++ {
+			p, old := current.processes[i], previous.processes[i]
+			if p.writeBytes < old.writeBytes {
+				return nil, errors.New("process IO counter reset")
+			}
+			values = append(values, strconv.FormatUint(p.writeBytes, 10), strconv.FormatUint(p.writeBytes-old.writeBytes, 10), strconv.FormatUint(p.fdCount, 10))
+		}
+	}
 	return values, nil
 }
 
 func run() error {
+	flag.CommandLine.SetOutput(io.Discard)
 	agent := flag.Int("agent-pid", 0, "agent PID")
 	xray := flag.Int("xray-pid", 0, "official Xray PID")
 	load := flag.Int("load-pid", 0, "optional load/mock controller PID measured separately")
 	duration := flag.Duration("duration", 30*time.Minute, "measurement duration, at most 24h")
 	interval := flag.Duration("interval", time.Second, "sampling interval, at least 1s")
+	details := flag.Bool("io-fd", false, "read-only kernel write_bytes and FD counts; no FD targets; NOT physical SSD wear")
 	flag.Parse()
 	if runtime.GOOS != "linux" {
 		return errors.New("collector requires Linux /proc")
@@ -164,7 +253,7 @@ func run() error {
 		return errors.New("invalid CLK_TCK")
 	}
 	pids := [4]int{*agent, *xray, os.Getpid(), *load}
-	previous, err := collect(pids)
+	previous, err := collectDetails(pids, *details)
 	if err != nil {
 		return err
 	}
@@ -172,6 +261,15 @@ func run() error {
 	header := []string{"utc", "elapsed_seconds", "agent_cpu_one_core_percent", "agent_rss_bytes", "xray_cpu_one_core_percent", "xray_rss_bytes", "collector_cpu_one_core_percent", "collector_rss_bytes", "system_busy_percent", "system_memory_used_bytes", "system_memory_available_bytes", "system_swap_used_bytes"}
 	if *load > 0 {
 		header = append(header, "load_cpu_one_core_percent", "load_rss_bytes")
+	}
+	if *details {
+		names := []string{"agent", "xray", "collector"}
+		if *load > 0 {
+			names = append(names, "load")
+		}
+		for _, name := range names {
+			header = append(header, name+"_kernel_write_bytes_total", name+"_kernel_write_bytes_delta", name+"_fd_count")
+		}
 	}
 	if err := w.Write(header); err != nil {
 		return err
@@ -184,7 +282,7 @@ func run() error {
 	defer ticker.Stop()
 	for i := 0; i < int(*duration / *interval); i++ {
 		<-ticker.C
-		current, err := collect(pids)
+		current, err := collectDetails(pids, *details)
 		if err != nil {
 			return err
 		}
@@ -205,8 +303,10 @@ func run() error {
 }
 
 func main() {
+	logging.SuppressUnstructured()
+	defer logging.RecoverMain()
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, logging.Diagnostic(err))
 		os.Exit(1)
 	}
 }

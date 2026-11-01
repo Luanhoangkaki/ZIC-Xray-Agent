@@ -9,9 +9,13 @@ umask 077
 [[ ${ID:-} == debian && ${VERSION_ID:-} == 12 ]] || { printf '%s\n' 'This acceptance runner requires Debian 12.' >&2; exit 1; }
 case $(uname -m) in x86_64) arch=amd64;;aarch64|arm64) arch=arm64;;*) exit 1;;esac
 [[ -n ${XRAY_BINARY:-} && $XRAY_BINARY == /* && -x $XRAY_BINARY ]] || { printf '%s\n' 'Provide XRAY_BINARY as an absolute path to a verified official Linux Xray executable.' >&2; exit 1; }
+expected_core=e783b9d2b46ed1ab3617c59b04dfbce38c999322d018c6e060f18d88bf6158aa
+if [[ $arch == arm64 ]]; then expected_core=f02fa77fa2f1a0f8f2b4fd69af5000494bcc3fa4e97899caf023c7f72fd74474; fi
+actual_core=$(sha256sum -- "$XRAY_BINARY")
+[[ ${actual_core%% *} == "$expected_core" ]] || { printf '%s\n' 'Official core checksum mismatch; nothing executed.' >&2; exit 1; }
 if command -v systemctl >/dev/null; then
-    for service in xray.service zic-xray-agent.service; do
-        if systemctl is-active --quiet "$service"; then printf '%s\n' 'Refusing: an existing Xray/agent service is active. Use a disposable, unused VM.' >&2; exit 1; fi
+    for service in xray.service zic-xray-agent.service zic-lab-panel.service zic-lab-core.service zic-lab-agent.service; do
+        if systemctl is-active --quiet "$service"; then printf '%s\n' 'Refusing: an existing Xray/agent/Lab service is active. Use a disposable, unused VM.' >&2; exit 1; fi
     done
 fi
 project_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)

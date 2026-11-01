@@ -4,6 +4,7 @@ package xrayapi
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -20,6 +22,10 @@ import (
 )
 
 const handlerService = "/xray.app.proxyman.command.HandlerService/"
+
+// This internal client is used only by the agent/lab tools. gRPC's default
+// logger can bypass the application's fixed-code error boundary on stderr.
+func init() { grpclog.SetLoggerV2(grpclog.NewLoggerV2(io.Discard, io.Discard, io.Discard)) }
 
 type Client struct{ connection *grpc.ClientConn }
 
